@@ -16,6 +16,8 @@ const likeBtn = document.getElementById("likeBtn");
 const giftBtn = document.getElementById("giftBtn");
 
 let localStream = null;
+let pc = null;
+let ws = null;
 let usingFront = true;
 
 // ===== CAMERA =====
@@ -34,6 +36,61 @@ function stopCamera() {
   myVideo.srcObject = null;
   myVideo.style.display = "none";
   myLabel.style.display = "flex";
+}
+
+// ===== WEBSOCKET =====
+function connectWS() {
+  ws = new WebSocket(`ws://${location.host}`);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: "join" }));
+  };
+
+  ws.onmessage = async (msg) => {
+    const data = JSON.parse(msg.data);
+
+    if(data.type === "matched") {
+      startWebRTC();
+    }
+    if(data.type === "signal") {
+      await pc.setRemoteDescription(new RTCSessionDescription(data.signal));
+      if(data.signal.type === "offer") {
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        ws.send(JSON.stringify({ type: "signal", signal: answer }));
+      }
+    }
+    if(data.type === "chat") addMessage("Собеседник", data.message);
+    if(data.type === "partner-left") {
+      partnerVideo.srcObject = null;
+      addSystem("Собеседник покинул чат");
+    }
+    if(data.type === "searching") addSystem("Поиск собеседника...");
+  };
+}
+
+// ===== WEBRTC =====
+function startWebRTC() {
+  pc = new RTCPeerConnection();
+
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  pc.ontrack = e => {
+    partnerVideo.srcObject = e.streams[0];
+    partnerVideo.style.display = "block";
+  };
+
+  pc.onicecandidate = e => {
+    if(e.candidate) return;
+    ws.send(JSON.stringify({ type: "signal", signal: pc.localDescription }));
+  };
+
+  createOffer();
+}
+
+async function createOffer() {
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  ws.send(JSON.stringify({ type: "signal", signal: offer }));
 }
 
 // ===== CHAT =====
@@ -58,13 +115,14 @@ startBtn.onclick = async () => {
   startBtn.style.display = "none";
   endBtn.style.display = "block";
   nextBtn.style.display = "block";
-  addSystem("Поиск собеседника...");
+  connectWS();
 };
 
 endBtn.onclick = () => {
   stopCamera();
+  if(pc) pc.close();
   partnerVideo.srcObject = null;
-  partnerVideo.style.display = "none";
+  if(ws) ws.send(JSON.stringify({ type: "end" }));
   chat.innerHTML = "";
   addSystem("Чат завершён");
   startBtn.style.display = "block";
@@ -73,10 +131,12 @@ endBtn.onclick = () => {
 };
 
 nextBtn.onclick = () => {
+  if(pc) pc.close();
   partnerVideo.srcObject = null;
-  addSystem("Поиск следующего собеседника...");
+  ws.send(JSON.stringify({ type: "next" }));
 };
 
+// ===== OTHER BUTTONS =====
 flipBtn.onclick = async () => {
   usingFront = !usingFront;
   stopCamera();
@@ -86,6 +146,7 @@ flipBtn.onclick = async () => {
 sendBtn.onclick = () => {
   if(input.value.trim()) {
     addMessage("Вы", input.value);
+    ws.send(JSON.stringify({ type: "chat", message: input.value }));
     input.value = "";
   }
 };
@@ -112,8 +173,3 @@ function playCoinSound() {
   }
 }
 buyBtn.onclick = playCoinSound;
-
-// ===== CONTROL BUTTONS (ALERTS) =====
-reportBtn.onclick = () => { alert("Сигнал отправлен!"); }
-likeBtn.onclick = () => { alert("Вы лайкнули собеседника!"); }
-giftBtn.onclick = () => { alert("Подарок отправлен!"); }
