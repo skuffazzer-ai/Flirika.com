@@ -2,9 +2,10 @@
   "name": "flirika",
   "version": "1.0.0",
   "scripts": {
-    "start": "serve public -l 10000"
+    "start": "node server.js"
   },
   "dependencies": {
-    "serve": "^14.2.0"
+    "express": "^4.18.2",
+    "ws": "^8.13.0"
   }
 }
