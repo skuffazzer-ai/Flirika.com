@@ -13,9 +13,13 @@ io.on('connection', socket => {
     console.log('Новый пользователь:', socket.id);
 
     if (waitingUser) {
-        // соединяем с ожидающим
+        // Соединяем с ожидающим
+        socket.partnerId = waitingUser.id;
+        waitingUser.partnerId = socket.id;
+
         socket.emit('partner-found', { partnerId: waitingUser.id });
         waitingUser.emit('partner-found', { partnerId: socket.id });
+
         waitingUser = null;
     } else {
         waitingUser = socket;
@@ -23,16 +27,22 @@ io.on('connection', socket => {
     }
 
     socket.on('signal', data => {
-        io.to(data.partnerId).emit('signal', { signal: data.signal, from: socket.id });
+        if (data.partnerId) {
+            io.to(data.partnerId).emit('signal', { signal: data.signal, from: socket.id });
+        }
     });
 
     socket.on('chat-message', data => {
-        io.to(data.partnerId).emit('chat-message', { message: data.message, from: socket.id });
+        if (data.partnerId) {
+            io.to(data.partnerId).emit('chat-message', { message: data.message, from: socket.id });
+        }
     });
 
     socket.on('disconnect', () => {
         if (waitingUser && waitingUser.id === socket.id) waitingUser = null;
-        socket.broadcast.emit('partner-disconnected', socket.id);
+        if (socket.partnerId) {
+            io.to(socket.partnerId).emit('partner-disconnected');
+        }
         console.log('Пользователь отключился:', socket.id);
     });
 });
