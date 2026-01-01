@@ -11,6 +11,7 @@ app.use(express.static("public"));
 let waitingUser = null;
 
 io.on("connection", (socket) => {
+
   socket.on("ready", () => {
     if (waitingUser) {
       socket.partner = waitingUser;
@@ -25,24 +26,15 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("offer", (data) => {
-    socket.partner?.emit("offer", data);
-  });
-
-  socket.on("answer", (data) => {
-    socket.partner?.emit("answer", data);
-  });
-
-  socket.on("ice-candidate", (data) => {
-    socket.partner?.emit("ice-candidate", data);
-  });
+  socket.on("offer", (data) => socket.partner?.emit("offer", data));
+  socket.on("answer", (data) => socket.partner?.emit("answer", data));
+  socket.on("ice-candidate", (data) => socket.partner?.emit("ice-candidate", data));
 
   socket.on("disconnect", () => {
     if (waitingUser === socket) waitingUser = null;
-    if (socket.partner) {
-      socket.partner.partner = null;
-    }
+    if (socket.partner) socket.partner.partner = null;
   });
 });
 
 server.listen(process.env.PORT || 3000);
+
