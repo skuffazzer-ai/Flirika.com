@@ -1,46 +1,42 @@
 const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+const http = require("http").createServer(app);
+const io = require("socket.io")(http);
 
 app.use(express.static("public"));
 
-let waitingUsers = [];
+let waitingUser = null;
 
 io.on("connection", (socket) => {
-  console.log("New user connected");
+  console.log("User connected:", socket.id);
 
-  socket.on("ready", () => {
-    if (waitingUsers.length > 0) {
-      const partner = waitingUsers.shift();
-      socket.partner = partner;
-      partner.partner = socket;
+  // Если есть ждущий пользователь — соединяем их
+  if (waitingUser) {
+    const peer1 = waitingUser;
+    const peer2 = socket;
+    peer1.emit("foundPeer", { peerId: peer2.id });
+    peer2.emit("foundPeer", { peerId: peer1.id });
+    waitingUser = null;
+  } else {
+    waitingUser = socket;
+  }
 
-      socket.emit("match");
-      partner.emit("match");
-    } else {
-      waitingUsers.push(socket);
-    }
+  // Сигналы WebRTC
+  socket.on("signal", (data) => {
+    io.to(data.to).emit("signal", {
+      from: socket.id,
+      signal: data.signal
+    });
   });
-
-  socket.on("offer", (data) => socket.partner?.emit("offer", data));
-  socket.on("answer", (data) => socket.partner?.emit("answer", data));
-  socket.on("ice-candidate", (data) => socket.partner?.emit("ice-candidate", data));
-
-  socket.on("message", (msg) => socket.partner?.emit("message", msg));
 
   socket.on("disconnect", () => {
-    waitingUsers = waitingUsers.filter(u => u !== socket);
-    if (socket.partner) {
-      socket.partner.partner = null;
-      socket.partner.emit("partner-disconnected");
+    console.log("User disconnected:", socket.id);
+    if (waitingUser && waitingUser.id === socket.id) {
+      waitingUser = null;
     }
+    socket.broadcast.emit("peerDisconnected", socket.id);
   });
 });
 
-server.listen(process.env.PORT || 3000, () => {
-  console.log("Server running");
-});
+const PORT = process.env.PORT || 3000;
+http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
