@@ -2,7 +2,6 @@ const socket = io();
 
 const myVideo = document.getElementById('myVideo');
 const partnerVideo = document.getElementById('partnerVideo');
-const myLabel = document.getElementById('myLabel');
 const chat = document.getElementById('chat');
 const input = document.getElementById('textInput');
 
@@ -35,7 +34,7 @@ function createPeerConnection() {
     peerConnection = new RTCPeerConnection(configuration);
 
     peerConnection.onicecandidate = event => {
-        if (event.candidate) {
+        if (event.candidate && partnerId) {
             socket.emit('signal', { partnerId, signal: { candidate: event.candidate } });
         }
     };
@@ -45,7 +44,9 @@ function createPeerConnection() {
         partnerVideo.style.display = 'block';
     };
 
-    myStream.getTracks().forEach(track => peerConnection.addTrack(track, myStream));
+    if (myStream) {
+        myStream.getTracks().forEach(track => peerConnection.addTrack(track, myStream));
+    }
 }
 
 async function startCall() {
@@ -59,6 +60,7 @@ async function handleSignal(data) {
     if (!peerConnection) createPeerConnection();
 
     if (data.signal.type === 'offer') {
+        partnerId = data.from;
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.signal));
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
@@ -114,9 +116,7 @@ socket.on('partner-found', data => {
 
 socket.on('signal', handleSignal);
 
-socket.on('chat-message', data => {
-    addMessage(`Собеседник: ${data.message}`);
-});
+socket.on('chat-message', data => addMessage(`Собеседник: ${data.message}`));
 
 socket.on('waiting', msg => addMessage(msg));
 
