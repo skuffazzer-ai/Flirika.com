@@ -8,21 +8,21 @@ const io = new Server(server);
 
 app.use(express.static("public"));
 
-let waitingUser = null;
+let waitingUsers = [];
 
 io.on("connection", (socket) => {
+  console.log("New user connected");
 
   socket.on("ready", () => {
-    if (waitingUser) {
-      socket.partner = waitingUser;
-      waitingUser.partner = socket;
+    if (waitingUsers.length > 0) {
+      const partner = waitingUsers.shift();
+      socket.partner = partner;
+      partner.partner = socket;
 
       socket.emit("match");
-      waitingUser.emit("match");
-
-      waitingUser = null;
+      partner.emit("match");
     } else {
-      waitingUser = socket;
+      waitingUsers.push(socket);
     }
   });
 
@@ -30,11 +30,17 @@ io.on("connection", (socket) => {
   socket.on("answer", (data) => socket.partner?.emit("answer", data));
   socket.on("ice-candidate", (data) => socket.partner?.emit("ice-candidate", data));
 
+  socket.on("message", (msg) => socket.partner?.emit("message", msg));
+
   socket.on("disconnect", () => {
-    if (waitingUser === socket) waitingUser = null;
-    if (socket.partner) socket.partner.partner = null;
+    waitingUsers = waitingUsers.filter(u => u !== socket);
+    if (socket.partner) {
+      socket.partner.partner = null;
+      socket.partner.emit("partner-disconnected");
+    }
   });
 });
 
-server.listen(process.env.PORT || 3000);
-
+server.listen(process.env.PORT || 3000, () => {
+  console.log("Server running");
+});
