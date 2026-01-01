@@ -1,89 +1,64 @@
-<script>
-const myVideo = document.getElementById("myVideo");
-const partnerVideo = document.getElementById("partnerVideo");
-const startBtn = document.getElementById("startBtn");
-const nextBtn = document.getElementById("nextBtn");
-const endBtn = document.getElementById("endBtn");
-const input = document.getElementById("textInput");
-const sendBtn = document.getElementById("sendBtn");
-const chat = document.getElementById("chat");
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flirika Chat Roulette</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
 
-let localStream;
-let pc;
-let ws;
+  <!-- PULL-TO-REFRESH INDICATOR -->
+  <div id="ptr-indicator"></div>
 
-// ===== WebSocket сигналинг =====
-function connectWS() {
-  ws = new WebSocket("wss://" + location.host);
-  ws.onmessage = async (event) => {
-    const data = JSON.parse(event.data);
-    if (data.sdp) {
-      await pc.setRemoteDescription(data.sdp);
-      if (data.sdp.type === "offer") {
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify({ sdp: pc.localDescription }));
-      }
-    } else if (data.ice) {
-      try { await pc.addIceCandidate(data.ice); } catch(e){}
-    }
-  };
-}
+  <!-- TOP VIDEO -->
+  <div class="top">
 
-// ===== WebRTC =====
-async function startCall() {
-  localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
-  myVideo.srcObject = localStream;
-  myVideo.style.display = "block";
+    <!-- MY VIDEO -->
+    <div class="video-box">
+      <video id="myVideo" autoplay muted playsinline></video>
+      <div class="placeholder" id="myLabel">Моя камера</div>
 
-  pc = new RTCPeerConnection();
+      <div class="token-panel">
+        <button class="buy-btn" id="buyBtn">BUY</button>
+        <div class="balance">0.007$</div>
+      </div>
 
-  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      <button id="flipBtn" class="control-btn">🔁</button>
 
-  pc.ontrack = e => {
-    partnerVideo.srcObject = e.streams[0];
-    partnerVideo.style.display = "block";
-  };
+      <div class="my-controls">
+        <button id="nextBtn" class="control-btn" style="background:#2ecc71;">⏭</button>
+        <button id="startBtn" class="control-btn" style="background:#3498db;">▶️</button>
+        <button id="endBtn" class="control-btn" style="background:#e74c3c;">⏹</button>
+      </div>
+    </div>
 
-  pc.onicecandidate = e => {
-    if (e.candidate) ws.send(JSON.stringify({ ice: e.candidate }));
-  };
+    <!-- PARTNER VIDEO -->
+    <div class="video-box">
+      <video id="partnerVideo" autoplay playsinline></video>
+      <div class="placeholder">Собеседник</div>
 
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  ws.send(JSON.stringify({ sdp: pc.localDescription }));
-}
+      <button class="control-btn" id="reportBtn">🚩</button>
+      <button class="control-btn" id="likeBtn">❤️</button>
+      <button class="control-btn" id="giftBtn">🎁</button>
+    </div>
 
-// ===== Кнопки =====
-startBtn.onclick = async () => {
-  connectWS();
-  await startCall();
-};
+  </div>
 
-endBtn.onclick = () => {
-  pc?.close();
-  localStream?.getTracks().forEach(t=>t.stop());
-  partnerVideo.srcObject = null;
-  myVideo.srcObject = null;
-};
+  <!-- CHAT -->
+  <div class="bottom">
+    <div class="chat" id="chat">
+      <p class="system">Чат готов</p>
+    </div>
+    <div class="input-area">
+      <input id="textInput" placeholder="Введите сообщение">
+      <button class="send" id="sendBtn">Отправить</button>
+    </div>
+  </div>
 
-sendBtn.onclick = () => {
-  if(input.value.trim()){
-    const p = document.createElement("p");
-    p.textContent = "Вы: " + input.value;
-    chat.appendChild(p);
-    ws.send(JSON.stringify({ chat: input.value }));
-    input.value = "";
-  }
-};
+</div>
 
-// Чат
-ws?.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  if(data.chat){
-    const p = document.createElement("p");
-    p.textContent = "Собеседник: " + data.chat;
-    chat.appendChild(p);
-  }
-};
-</script>
+<script src="main.js"></script>
+</body>
+</html>
