@@ -11,8 +11,6 @@
 
   <!-- TOP VIDEO -->
   <div class="top">
-
-    <!-- MY VIDEO -->
     <div class="video-box">
       <video id="myVideo" autoplay muted playsinline></video>
       <div class="placeholder" id="myLabel">Моя камера</div>
@@ -25,13 +23,12 @@
       <button id="flipBtn" class="control-btn">🔁</button>
 
       <div class="my-controls">
-        <button id="nextBtn" class="control-btn" style="background:#2ecc71;">⏭</button>
-        <button id="startBtn" class="control-btn" style="background:#3498db;">▶️</button>
-        <button id="endBtn" class="control-btn" style="background:#e74c3c;">⏹</button>
+        <button id="nextBtn" class="control-btn">⏭</button>
+        <button id="startBtn" class="control-btn">▶️</button>
+        <button id="endBtn" class="control-btn">⏹</button>
       </div>
     </div>
 
-    <!-- PARTNER VIDEO -->
     <div class="video-box">
       <video id="partnerVideo" autoplay playsinline></video>
       <div class="placeholder">Собеседник</div>
@@ -40,7 +37,6 @@
       <button class="control-btn" id="likeBtn">❤️</button>
       <button class="control-btn" id="giftBtn">🎁</button>
     </div>
-
   </div>
 
   <!-- CHAT -->
@@ -56,6 +52,7 @@
 
 </div>
 
-<script src="main.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
