@@ -1,7 +1,7 @@
 {
   "name": "Flirika",
   "version": "1.0.0",
-  "description": "Video Chat Roulette",
+  "description": "Видео чат-рулетка с моим интерфейсом",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
