@@ -3,14 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flirika Chat Roulette</title>
-<link rel="stylesheet" href="style.css">
+<title>Flirika Chat</title>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <div class="app">
 
   <!-- TOP VIDEO -->
   <div class="top">
+    <!-- Моя камера -->
     <div class="video-box">
       <video id="myVideo" autoplay muted playsinline></video>
       <div class="placeholder" id="myLabel">Моя камера</div>
@@ -29,10 +30,10 @@
       </div>
     </div>
 
+    <!-- Камера собеседника -->
     <div class="video-box">
       <video id="partnerVideo" autoplay playsinline></video>
       <div class="placeholder">Собеседник</div>
-
       <button class="control-btn" id="reportBtn">🚩</button>
       <button class="control-btn" id="likeBtn">❤️</button>
       <button class="control-btn" id="giftBtn">🎁</button>
@@ -51,8 +52,6 @@
   </div>
 
 </div>
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="app.js"></script>
+<script src="/script.js"></script>
 </body>
 </html>
