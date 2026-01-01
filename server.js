@@ -1,11 +1,39 @@
-const express = require("express");
+const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
 
-app.use(express.static("public"));
+const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-  res.sendFile(__dirname + "/public/index.html");
+app.use(express.static('public'));
+
+let waitingUser = null;
+
+io.on('connection', socket => {
+  console.log('New user connected:', socket.id);
+
+  if (waitingUser) {
+    socket.emit('partner-found', { partnerId: waitingUser.id });
+    waitingUser.emit('partner-found', { partnerId: socket.id });
+    waitingUser = null;
+  } else {
+    waitingUser = socket;
+    socket.emit('waiting', 'Ждём собеседника...');
+  }
+
+  socket.on('signal', data => {
+    io.to(data.partnerId).emit('signal', { signal: data.signal, from: socket.id });
+  });
+
+  socket.on('chat-message', data => {
+    io.to(data.partnerId).emit('chat-message', { message: data.message, from: socket.id });
+  });
+
+  socket.on('disconnect', () => {
+    if (waitingUser && waitingUser.id === socket.id) waitingUser = null;
+    socket.broadcast.emit('partner-disconnected', socket.id);
+    console.log('User disconnected:', socket.id);
+  });
 });
 
-app.listen(port, () => console.log(`Server running on port ${port}`));
+http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
