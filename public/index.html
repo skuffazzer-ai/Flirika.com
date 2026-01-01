@@ -2,16 +2,20 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flirika Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Flirika Chat Roulette</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="app">
 
+  <!-- PULL-TO-REFRESH INDICATOR -->
+  <div id="ptr-indicator"></div>
+
   <!-- TOP VIDEO -->
   <div class="top">
-    <!-- Моя камера -->
+
+    <!-- MY VIDEO -->
     <div class="video-box">
       <video id="myVideo" autoplay muted playsinline></video>
       <div class="placeholder" id="myLabel">Моя камера</div>
@@ -30,15 +34,16 @@
       </div>
     </div>
 
-    <!-- Собеседник -->
+    <!-- PARTNER VIDEO -->
     <div class="video-box">
       <video id="partnerVideo" autoplay playsinline></video>
       <div class="placeholder">Собеседник</div>
 
-      <button class="control-btn" id="reportBtn" style="top:8px; right:8px;">🚩</button>
-      <button class="control-btn" id="likeBtn" style="top:8px; left:8px;">❤️</button>
-      <button class="control-btn" id="giftBtn" style="bottom:8px; left:8px;">🎁</button>
+      <button class="control-btn" id="reportBtn" style="top:8px; right:8px; background:#e74c3c; position:absolute; font-size:16px;">🚩</button>
+      <button class="control-btn" id="likeBtn" style="top:8px; left:8px; background:#e91e63; position:absolute; font-size:16px;">❤️</button>
+      <button class="control-btn" id="giftBtn" style="bottom:8px; left:8px; background:#f1c40f; position:absolute; font-size:16px;">🎁</button>
     </div>
+
   </div>
 
   <!-- CHAT -->
@@ -52,90 +57,9 @@
       <button class="send" id="sendBtn">Отправить</button>
     </div>
   </div>
+
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
-<script>
-const socket = io();
-
-const myVideo = document.getElementById("myVideo");
-const partnerVideo = document.getElementById("partnerVideo");
-const startBtn = document.getElementById("startBtn");
-const nextBtn = document.getElementById("nextBtn");
-const endBtn = document.getElementById("endBtn");
-const flipBtn = document.getElementById("flipBtn");
-const sendBtn = document.getElementById("sendBtn");
-const input = document.getElementById("textInput");
-const buyBtn = document.getElementById("buyBtn");
-
-let myStream = null;
-let pc = null;
-let usingFront = true;
-
-const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-
-// ===== FUNCTIONS =====
-async function startCamera() {
-  myStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: usingFront ? "user":"environment" }, audio: true });
-  myVideo.srcObject = myStream;
-}
-
-function stopCamera() {
-  if(myStream) myStream.getTracks().forEach(t=>t.stop());
-  myVideo.srcObject = null;
-}
-
-// ===== WEBRTC =====
-function createPeer() {
-  pc = new RTCPeerConnection(config);
-  myStream.getTracks().forEach(track => pc.addTrack(track, myStream));
-
-  pc.onicecandidate = e => { if(e.candidate) socket.emit("signal", { candidate: e.candidate }); };
-  pc.ontrack = e => { partnerVideo.srcObject = e.streams[0]; };
-}
-
-// ===== SOCKET EVENTS =====
-socket.on("partnerFound", async () => {
-  createPeer();
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  socket.emit("signal", { sdp: offer });
-});
-
-socket.on("signal", async (data) => {
-  if(data.sdp) {
-    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    if(data.sdp.type === "offer") {
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit("signal", { sdp: answer });
-    }
-  }
-  if(data.candidate) pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-});
-
-socket.on("partnerLeft", () => { partnerVideo.srcObject = null; alert("Собеседник ушёл"); });
-
-socket.on("chat", msg => {
-  const p = document.createElement("p"); p.textContent = "Собеседник: "+msg; document.getElementById("chat").appendChild(p);
-});
-
-// ===== BUTTONS =====
-startBtn.onclick = async () => {
-  await startCamera();
-  startBtn.style.display = "none"; endBtn.style.display = "block"; nextBtn.style.display = "block";
-  socket.emit("signal", {}); // trigger peer search
-};
-
-nextBtn.onclick = () => { partnerVideo.srcObject = null; socket.emit("signal", {}); };
-
-endBtn.onclick = () => { stopCamera(); partnerVideo.srcObject=null; startBtn.style.display="block"; endBtn.style.display="none"; nextBtn.style.display="none"; };
-
-flipBtn.onclick = async () => { usingFront = !usingFront; stopCamera(); await startCamera(); };
-
-sendBtn.onclick = () => { const msg = input.value.trim(); if(msg){ socket.emit("chat", msg); const p = document.createElement("p"); p.textContent = "Вы: "+msg; document.getElementById("chat").appendChild(p); input.value=""; } };
-
-buyBtn.onclick = () => { const ctx = new (window.AudioContext||window.webkitAudioContext)(); for(let i=0;i<3;i++){ const buffer = ctx.createBuffer(1, ctx.sampleRate*0.2, ctx.sampleRate); const data = buffer.getChannelData(0); for(let j=0;j<data.length;j++) data[j]=(Math.random()*2-1)*0.3; const source=ctx.createBufferSource(); source.buffer=buffer; const gain=ctx.createGain(); gain.gain.setValueAtTime(0.2,ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+0.2); source.connect(gain).connect(ctx.destination); source.start(ctx.currentTime+i*0.05); source.stop(ctx.currentTime+0.25+i*0.05); } };
-</script>
+<script src="client.js"></script>
 </body>
 </html>
