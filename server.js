@@ -4,31 +4,46 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server);
+
+const PORT = process.env.PORT || 3000;
 
 app.use(express.static("public"));
 
-let waitingUser = null;
+let waiting = null;
 
 io.on("connection", socket => {
+  console.log("Новое соединение:", socket.id);
+
   socket.on("join", () => {
-    if (waitingUser) {
-      socket.emit("matched", true);
-      waitingUser.emit("matched", false);
-      waitingUser = null;
-    } else waitingUser = socket;
+    if(waiting){
+      // Найден собеседник
+      const partner = waiting;
+      waiting = null;
+
+      socket.emit("matched", true);      // этот клиент — вызывающий
+      partner.emit("matched", false);    // партнер — принимающий
+
+      // Связываем для сигналов
+      socket.partner = partner;
+      partner.partner = socket;
+
+    } else {
+      waiting = socket;
+    }
   });
 
   socket.on("signal", data => {
-    socket.broadcast.emit("signal", data);
+    if(socket.partner) socket.partner.emit("signal", data);
   });
 
   socket.on("disconnect", () => {
-    if (waitingUser === socket) waitingUser = null;
-    socket.broadcast.emit("partner-left");
+    if(waiting === socket) waiting = null;
+    if(socket.partner){
+      socket.partner.emit("partner-left");
+      socket.partner.partner = null;
+    }
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
+server.listen(PORT, () => console.log(`Server started on port ${PORT}`));
