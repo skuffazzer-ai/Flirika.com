@@ -17,17 +17,14 @@ io.on("connection", socket => {
 
   socket.on("join", () => {
     if(waiting){
-      // Найден собеседник
       const partner = waiting;
       waiting = null;
 
-      socket.emit("matched", true);      // этот клиент — вызывающий
-      partner.emit("matched", false);    // партнер — принимающий
+      socket.emit("matched", true);
+      partner.emit("matched", false);
 
-      // Связываем для сигналов
       socket.partner = partner;
       partner.partner = socket;
-
     } else {
       waiting = socket;
     }
@@ -35,6 +32,10 @@ io.on("connection", socket => {
 
   socket.on("signal", data => {
     if(socket.partner) socket.partner.emit("signal", data);
+  });
+
+  socket.on("message", text => {
+    if(socket.partner) socket.partner.emit("message", text);
   });
 
   socket.on("disconnect", () => {
