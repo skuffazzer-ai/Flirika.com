@@ -1,31 +1,15 @@
-import express from "express";
-import http from "http";
-import { WebSocketServer } from "ws";
-
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
-
+const WebSocket = require('ws');
+const server = new WebSocket.Server({ port: process.env.PORT || 3000 });
 let clients = [];
 
-wss.on("connection", (ws) => {
+server.on('connection', ws => {
   clients.push(ws);
-  console.log("Новый клиент подключился");
-
-  ws.on("message", (message) => {
-    // Передаём сообщение другому пользователю
-    const other = clients.find(c => c !== ws);
-    if (other && other.readyState === other.OPEN) {
-      other.send(message);
-    }
+  ws.on('message', msg => {
+    clients.forEach(client => {
+      if(client !== ws && client.readyState === WebSocket.OPEN) {
+        client.send(msg);
+      }
+    });
   });
-
-  ws.on("close", () => {
-    clients = clients.filter(c => c !== ws);
-    console.log("Клиент отключился");
-  });
-});
-
-server.listen(process.env.PORT || 3000, () => {
-  console.log("Сервер сигналинга запущен на порту 3000");
+  ws.on('close', () => { clients = clients.filter(c => c !== ws); });
 });
