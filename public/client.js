@@ -1,19 +1,22 @@
 const socket = io();
 
+// DOM элементы
 const myVideo = document.getElementById("myVideo");
 const partnerVideo = document.getElementById("partnerVideo");
 const startBtn = document.getElementById("startBtn");
 const endBtn = document.getElementById("endBtn");
 
-let localStream;
-let peerConnection;
-let peerId;
+let localStream = null;
+let peerConnection = null;
 
-// WebRTC конфиг
+// ICE сервера для WebRTC
 const config = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" }
+  ]
 };
 
+// ===== Камера =====
 async function startCamera() {
   localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   myVideo.srcObject = localStream;
@@ -21,72 +24,77 @@ async function startCamera() {
 
 function stopCamera() {
   if (localStream) {
-    localStream.getTracks().forEach(t => t.stop());
+    localStream.getTracks().forEach(track => track.stop());
     myVideo.srcObject = null;
-  }
-  if (peerConnection) {
-    peerConnection.close();
-    peerConnection = null;
-    partnerVideo.srcObject = null;
   }
 }
 
-// создаём WebRTC соединение
-function createPeerConnection() {
+// ===== WebRTC соединение =====
+function createPeerConnection(peerId) {
   peerConnection = new RTCPeerConnection(config);
 
-  // локальные треки
+  // Добавляем локальные треки
   localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-  // треки собеседника
+  // Когда приходит удаленный поток
   peerConnection.ontrack = (event) => {
     partnerVideo.srcObject = event.streams[0];
   };
 
   // ICE кандидаты
   peerConnection.onicecandidate = (event) => {
-    if (event.candidate && peerId) {
-      socket.emit("signal", { to: peerId, signal: { candidate: event.candidate } });
+    if (event.candidate) {
+      socket.emit("iceCandidate", { target: peerId, candidate: event.candidate });
     }
   };
+
+  return peerConnection;
 }
 
-// кнопка старт
+// ===== Кнопки =====
 startBtn.onclick = async () => {
   await startCamera();
+  socket.emit("readyForPeer");
 };
 
-// кнопка конец
 endBtn.onclick = () => {
   stopCamera();
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+    partnerVideo.srcObject = null;
+  }
 };
 
-// сигнализация WebRTC
-socket.on("foundPeer", async (data) => {
-  peerId = data.peerId;
-  createPeerConnection();
+// ===== Socket.io события =====
+socket.on("foundPeer", async ({ peerId }) => {
+  peerConnection = createPeerConnection(peerId);
 
-  // создаём оффер
+  // Создаем предложение
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
-  socket.emit("signal", { to: peerId, signal: { sdp: peerConnection.localDescription } });
+
+  socket.emit("offer", { target: peerId, sdp: offer });
 });
 
-socket.on("signal", async (data) => {
-  if (!peerConnection) createPeerConnection();
-  
-  if (data.signal.sdp) {
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.signal.sdp));
-    if (data.signal.sdp.type === "offer") {
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      socket.emit("signal", { to: data.from, signal: { sdp: peerConnection.localDescription } });
-    }
-  } else if (data.signal.candidate) {
-    await peerConnection.addIceCandidate(new RTCIceCandidate(data.signal.candidate));
+socket.on("offer", async ({ sdp, from }) => {
+  peerConnection = createPeerConnection(from);
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+
+  socket.emit("answer", { target: from, sdp: answer });
+});
+
+socket.on("answer", async ({ sdp }) => {
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+});
+
+socket.on("iceCandidate", async ({ candidate }) => {
+  try {
+    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+  } catch (e) {
+    console.error("Ошибка добавления ICE кандидата:", e);
   }
-});
-
-socket.on("peerDisconnected", () => {
-  partnerVideo.srcObject = null;
 });
