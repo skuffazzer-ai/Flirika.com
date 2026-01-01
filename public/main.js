@@ -20,7 +20,6 @@ let pc = null;
 let ws = null;
 let usingFront = true;
 
-// ===== CAMERA =====
 async function startCamera() {
   stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: usingFront ? "user" : "environment" }, audio:true });
   myVideo.srcObject = stream;
@@ -31,7 +30,7 @@ function stopCamera() {
   myVideo.srcObject = null;
 }
 
-// ===== WEBSOCKET =====
+// WebSocket
 function connectWS() {
   ws = new WebSocket(`wss://${window.location.host}`);
   ws.onmessage = async (msg) => {
@@ -54,21 +53,15 @@ function connectWS() {
   };
 }
 
-// ===== PEER CONNECTION =====
+// Peer Connection
 function createPeer() {
   pc = new RTCPeerConnection();
   stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-  pc.ontrack = e => {
-    partnerVideo.srcObject = e.streams[0];
-  };
-
-  pc.onicecandidate = e => {
-    if (e.candidate) ws.send(JSON.stringify({ ice: e.candidate }));
-  };
+  pc.ontrack = e => { partnerVideo.srcObject = e.streams[0]; };
+  pc.onicecandidate = e => { if (e.candidate) ws.send(JSON.stringify({ ice: e.candidate })); };
 }
 
-// ===== CHAT =====
+// CHAT
 sendBtn.onclick = () => {
   if(input.value.trim()) {
     const msg = input.value;
@@ -81,7 +74,7 @@ sendBtn.onclick = () => {
 
 input.addEventListener("keydown", e => { if(e.key==="Enter") sendBtn.click(); });
 
-// ===== BUTTONS =====
+// BUTTONS
 startBtn.onclick = async () => {
   await startCamera();
   connectWS();
@@ -110,7 +103,7 @@ flipBtn.onclick = async () => {
   await startCamera();
 };
 
-// ===== BUY SOUND =====
+// BUY SOUND
 buyBtn.onclick = () => {
   const audio = new Audio("assets/coin.mp3");
   audio.play();
