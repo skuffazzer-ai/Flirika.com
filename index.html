@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flirika</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <div class="top">
+    <!-- Моя камера -->
+    <div class="video-box">
+      <video id="myVideo" autoplay muted playsinline></video>
+      <div class="placeholder" id="myLabel">Моя камера</div>
+
+      <div class="token-panel">
+        <button class="buy-btn" id="buyBtn">BUY</button>
+        <div class="balance">0.007$</div>
+      </div>
+
+      <button id="flipBtn" class="control-btn">🔁</button>
+
+      <div class="my-controls">
+        <button id="nextBtn" class="control-btn" style="background:#2ecc71;">⏭</button>
+        <button id="startBtn" class="control-btn" style="background:#3498db;">▶️</button>
+        <button id="endBtn" class="control-btn" style="background:#e74c3c;">⏹</button>
+      </div>
+    </div>
+
+    <!-- Камера собеседника -->
+    <div class="video-box">
+      <video id="partnerVideo" autoplay playsinline></video>
+      <div class="placeholder">Собеседник</div>
+    </div>
+  </div>
+
+  <!-- Чат -->
+  <div class="bottom">
+    <div class="chat" id="chat">
+      <p class="system">Чат готов</p>
+    </div>
+    <div class="input-area">
+      <input id="textInput" placeholder="Введите сообщение">
+      <button class="send" id="sendBtn">Отправить</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/simple-peer@9/simplepeer.min.js"></script>
+<script>
+const socket = io();
+
+// Видео элементы
+const myVideo = document.getElementById('myVideo');
+const partnerVideo = document.getElementById('partnerVideo');
+const myLabel = document.getElementById('myLabel');
+
+// Кнопки
+const startBtn = document.getElementById('startBtn');
+const endBtn = document.getElementById('endBtn');
+const nextBtn = document.getElementById('nextBtn');
+const sendBtn = document.getElementById('sendBtn');
+const input = document.getElementById('textInput');
+const buyBtn = document.getElementById('buyBtn');
+
+let stream;
+let peer;
+
+// ===== Камера и микрофон =====
+async function startMedia() {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    myVideo.srcObject = stream;
+}
+
+// ===== WebRTC сессия =====
+function startPeer(initiator) {
+    peer = new SimplePeer({ initiator, trickle: false, stream });
+
+    peer.on('signal', data => socket.emit('signal', data));
+    peer.on('stream', remoteStream => partnerVideo.srcObject = remoteStream);
+    peer.on('close', () => partnerVideo.srcObject = null);
+}
+
+// ===== Socket.io события =====
+socket.on('partnerFound', () => startPeer(true));
+socket.on('signal', data => peer.signal(data.signal));
+socket.on('chatMessage', data => addChatMessage('Собеседник', data.text));
+socket.on('partnerDisconnected', () => partnerVideo.srcObject = null);
+
+// ===== Чат =====
+function addChatMessage(user, text){
+    const p = document.createElement('p');
+    p.textContent = `${user}: ${text}`;
+    document.getElementById('chat').appendChild(p);
+}
+
+// ===== Кнопки =====
+startBtn.onclick = async () => {
+    await startMedia();
+    socket.emit('findPartner');
+};
+
+nextBtn.onclick = () => {
+    if (peer) peer.destroy();
+    partnerVideo.srcObject = null;
+    socket.emit('findPartner');
+};
+
+endBtn.onclick = () => {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (peer) peer.destroy();
+    partnerVideo.srcObject = null;
+    myVideo.srcObject = null;
+};
+
+// Отправка сообщений
+sendBtn.onclick = () => {
+    if(input.value.trim()) {
+        addChatMessage('Вы', input.value);
+        socket.emit('chatMessage', input.value);
+        input.value = '';
+    }
+};
+input.addEventListener('keydown', e => { if(e.key==='Enter') sendBtn.click(); });
+
+// Звук BUY
+buyBtn.onclick = () => {
+    const audio = new Audio('coin.mp3');
+    audio.play();
+};
+</script>
+</body>
+</html>
