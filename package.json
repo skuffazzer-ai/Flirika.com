@@ -1,6 +1,7 @@
 {
-  "name": "Flirika.com",
+  "name": "Flirika",
   "version": "1.0.0",
+  "description": "Видео чат Flirika",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -13,4 +14,3 @@
     "node": "20.x"
   }
 }
-
