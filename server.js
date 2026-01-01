@@ -1,56 +1,74 @@
 const express = require("express");
+const WebSocket = require("ws");
+const path = require("path");
+
 const app = express();
-const http = require("http").createServer(app);
-const io = require("socket.io")(http);
+const PORT = process.env.PORT || 10000;
 
-const PORT = process.env.PORT || 3000;
+app.use(express.static(path.join(__dirname, "public")));
 
-app.use(express.static("public"));
+const server = app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+
+// WebSocket сервер для сигнализации WebRTC
+const wss = new WebSocket.Server({ server });
 
 let waitingUser = null;
 
-io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+wss.on("connection", ws => {
+    ws.on("message", message => {
+        const data = JSON.parse(message);
 
-  // Присоединяем пользователя к собеседнику
-  if (waitingUser) {
-    const partner = waitingUser;
-    socket.partnerId = partner.id;
-    partner.partnerId = socket.id;
-    
-    socket.emit("partnerFound");
-    partner.emit("partnerFound");
-    
-    waitingUser = null;
-  } else {
-    waitingUser = socket;
-  }
+        // Найти собеседника
+        if(data.type === "join") {
+            if(waitingUser && waitingUser !== ws) {
+                // Соединяем двух пользователей
+                ws.partner = waitingUser;
+                waitingUser.partner = ws;
 
-  // Relay WebRTC signaling data
-  socket.on("signal", (data) => {
-    if (socket.partnerId) {
-      io.to(socket.partnerId).emit("signal", data);
-    }
-  });
+                ws.send(JSON.stringify({ type: "matched" }));
+                waitingUser.send(JSON.stringify({ type: "matched" }));
 
-  // Chat messages
-  socket.on("chat", (msg) => {
-    if (socket.partnerId) {
-      io.to(socket.partnerId).emit("chat", msg);
-    }
-  });
+                waitingUser = null;
+            } else {
+                waitingUser = ws;
+            }
+        }
 
-  socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
-    if (socket.partnerId) {
-      io.to(socket.partnerId).emit("partnerLeft");
-    }
-    if (waitingUser && waitingUser.id === socket.id) {
-      waitingUser = null;
-    }
-  });
-});
+        // Пересылаем сигнал партнеру
+        if(data.type === "signal" && ws.partner) {
+            ws.partner.send(JSON.stringify({ type: "signal", signal: data.signal }));
+        }
 
-http.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+        // Чат
+        if(data.type === "chat" && ws.partner) {
+            ws.partner.send(JSON.stringify({ type: "chat", message: data.message }));
+        }
+
+        // Next
+        if(data.type === "next") {
+            if(ws.partner) {
+                ws.partner.send(JSON.stringify({ type: "partner-left" }));
+                ws.partner.partner = null;
+                ws.partner = null;
+            }
+            ws.send(JSON.stringify({ type: "searching" }));
+        }
+
+        // End
+        if(data.type === "end") {
+            if(ws.partner) {
+                ws.partner.send(JSON.stringify({ type: "partner-left" }));
+                ws.partner.partner = null;
+                ws.partner = null;
+            }
+        }
+    });
+
+    ws.on("close", () => {
+        if(ws.partner) {
+            ws.partner.send(JSON.stringify({ type: "partner-left" }));
+            ws.partner.partner = null;
+        }
+        if(waitingUser === ws) waitingUser = null;
+    });
 });
