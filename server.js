@@ -10,12 +10,11 @@ app.use(express.static("public"));
 
 let waitingUser = null;
 
-io.on("connection", (socket) => {
-  console.log("Пользователь подключился:", socket.id);
+io.on("connection", socket => {
+  console.log("User connected:", socket.id);
 
-  // ===== Найти собеседника =====
   socket.on("readyForPeer", () => {
-    if (waitingUser && waitingUser.id !== socket.id) {
+    if(waitingUser && waitingUser.id !== socket.id) {
       const peer1 = waitingUser;
       const peer2 = socket;
       peer1.emit("foundPeer", { peerId: peer2.id });
@@ -26,29 +25,11 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ===== Обмен SDP =====
-  socket.on("offer", ({ target, sdp }) => {
-    io.to(target).emit("offer", { sdp, from: socket.id });
-  });
+  socket.on("offer", ({ target, sdp }) => io.to(target).emit("offer", { sdp, from: socket.id }));
+  socket.on("answer", ({ target, sdp }) => io.to(target).emit("answer", { sdp }));
+  socket.on("iceCandidate", ({ target, candidate }) => io.to(target).emit("iceCandidate", { candidate }));
 
-  socket.on("answer", ({ target, sdp }) => {
-    io.to(target).emit("answer", { sdp });
-  });
-
-  // ===== ICE кандидаты =====
-  socket.on("iceCandidate", ({ target, candidate }) => {
-    io.to(target).emit("iceCandidate", { candidate });
-  });
-
-  // ===== Отключение =====
-  socket.on("disconnect", () => {
-    if (waitingUser && waitingUser.id === socket.id) {
-      waitingUser = null;
-    }
-    console.log("Пользователь отключился:", socket.id);
-  });
+  socket.on("disconnect", () => { if(waitingUser && waitingUser.id === socket.id) waitingUser=null; });
 });
 
-server.listen(process.env.PORT || 3000, () => {
-  console.log("Сервер запущен на порту 3000");
-});
+server.listen(process.env.PORT || 3000, () => console.log("Server running"));
