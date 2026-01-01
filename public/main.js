@@ -1,127 +1,131 @@
 const socket = io();
 
-const myVideo = document.getElementById('myVideo');
-const partnerVideo = document.getElementById('partnerVideo');
-const chat = document.getElementById('chat');
-const input = document.getElementById('textInput');
+const myVideo = document.getElementById("myVideo");
+const partnerVideo = document.getElementById("partnerVideo");
+const startBtn = document.getElementById("startBtn");
+const endBtn = document.getElementById("endBtn");
+const nextBtn = document.getElementById("nextBtn");
+const sendBtn = document.getElementById("sendBtn");
+const input = document.getElementById("textInput");
+const chat = document.getElementById("chat");
+const buyBtn = document.getElementById("buyBtn");
 
-const startBtn = document.getElementById('startBtn');
-const nextBtn = document.getElementById('nextBtn');
-const endBtn = document.getElementById('endBtn');
-const sendBtn = document.getElementById('sendBtn');
+let localStream = null;
+let peerConnection = null;
+let partnerId = null;
 
-let myStream;
-let peerConnection;
-let partnerId;
+// ICE сервер (Google STUN)
+const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-// ======= CAMERA =======
-async function startCamera() {
-    myStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    myVideo.srcObject = myStream;
-    myVideo.style.display = 'block';
+// ===== FUNCTIONS =====
+async function startMedia() {
+  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  myVideo.srcObject = localStream;
 }
 
-function stopCamera() {
-    if (myStream) myStream.getTracks().forEach(t => t.stop());
-    myVideo.srcObject = null;
-    myVideo.style.display = 'none';
+function stopMedia(videoEl) {
+  if (!videoEl.srcObject) return;
+  videoEl.srcObject.getTracks().forEach(track => track.stop());
+  videoEl.srcObject = null;
 }
 
-// ======= WebRTC =======
-function createPeerConnection() {
-    peerConnection = new RTCPeerConnection(configuration);
+// ===== WEBRTC =====
+function createPeerConnection(id) {
+  peerConnection = new RTCPeerConnection(config);
+  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-    peerConnection.onicecandidate = event => {
-        if (event.candidate && partnerId) {
-            socket.emit('signal', { partnerId, signal: { candidate: event.candidate } });
-        }
-    };
+  peerConnection.ontrack = (event) => {
+    partnerVideo.srcObject = event.streams[0];
+  };
 
-    peerConnection.ontrack = event => {
-        partnerVideo.srcObject = event.streams[0];
-        partnerVideo.style.display = 'block';
-    };
-
-    if (myStream) {
-        myStream.getTracks().forEach(track => peerConnection.addTrack(track, myStream));
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('signal', { candidate: event.candidate });
     }
+  };
+
+  partnerId = id;
+  if (peerConnection) {
+    peerConnection.createOffer()
+      .then(offer => peerConnection.setLocalDescription(offer))
+      .then(() => socket.emit('signal', { sdp: peerConnection.localDescription }));
+  }
 }
 
-async function startCall() {
-    createPeerConnection();
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-    socket.emit('signal', { partnerId, signal: offer });
-}
+socket.on('partner-found', ({ partnerId: id }) => {
+  createPeerConnection(id);
+});
 
-async function handleSignal(data) {
-    if (!peerConnection) createPeerConnection();
-
-    if (data.signal.type === 'offer') {
-        partnerId = data.from;
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.signal));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        socket.emit('signal', { partnerId: data.from, signal: answer });
-    } else if (data.signal.type === 'answer') {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.signal));
-    } else if (data.signal.candidate) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(data.signal.candidate));
+socket.on('signal', async (data) => {
+  if (!peerConnection) createPeerConnection(null);
+  if (data.sdp) {
+    await peerConnection.setRemoteDescription(data.sdp);
+    if (data.sdp.type === 'offer') {
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit('signal', { sdp: peerConnection.localDescription });
     }
-}
+  } else if (data.candidate) {
+    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+  }
+});
 
-// ======= CHAT =======
-sendBtn.onclick = () => {
-    if (input.value.trim() && partnerId) {
-        socket.emit('chat-message', { partnerId, message: input.value });
-        addMessage(`Вы: ${input.value}`);
-        input.value = '';
-    }
-};
+socket.on('partner-disconnected', () => {
+  stopMedia(partnerVideo);
+  addMessage("Собеседник отключился");
+});
 
-function addMessage(text) {
-    const p = document.createElement('p');
-    p.textContent = text;
-    chat.appendChild(p);
-    chat.scrollTop = chat.scrollHeight;
-}
-
-// ======= BUTTONS =======
+// ===== BUTTONS =====
 startBtn.onclick = async () => {
-    await startCamera();
-};
-
-nextBtn.onclick = () => {
-    if (peerConnection) {
-        peerConnection.close();
-        partnerVideo.srcObject = null;
-        peerConnection = null;
-    }
+  await startMedia();
+  socket.emit('join');
+  addMessage("Поиск собеседника...");
 };
 
 endBtn.onclick = () => {
-    stopCamera();
-    if (peerConnection) peerConnection.close();
-    partnerVideo.srcObject = null;
-    peerConnection = null;
+  stopMedia(myVideo);
+  stopMedia(partnerVideo);
+  if (peerConnection) peerConnection.close();
+  peerConnection = null;
+  addMessage("Чат завершён");
 };
 
-// ======= SOCKET EVENTS =======
-socket.on('partner-found', data => {
-    partnerId = data.partnerId;
-    if (myStream) startCall();
-});
+nextBtn.onclick = () => {
+  stopMedia(partnerVideo);
+  if (peerConnection) peerConnection.close();
+  peerConnection = null;
+  socket.emit('join');
+  addMessage("Поиск следующего собеседника...");
+};
 
-socket.on('signal', handleSignal);
+sendBtn.onclick = () => {
+  if (!input.value.trim()) return;
+  addMessage("Вы: " + input.value);
+  socket.emit('signal', { chat: input.value });
+  input.value = "";
+};
 
-socket.on('chat-message', data => addMessage(`Собеседник: ${data.message}`));
+function addMessage(text) {
+  const p = document.createElement("p");
+  p.textContent = text;
+  chat.appendChild(p);
+  chat.scrollTop = chat.scrollHeight;
+}
 
-socket.on('waiting', msg => addMessage(msg));
-
-socket.on('partner-disconnected', () => {
-    addMessage('Собеседник отключился');
-    partnerVideo.srcObject = null;
-    peerConnection = null;
-});
+// ===== BUY BUTTON SOUND =====
+buyBtn.onclick = () => {
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+  for (let i=0;i<3;i++){
+    const buffer = ctx.createBuffer(1, ctx.sampleRate*0.2, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let j=0;j<data.length;j++) data[j]=(Math.random()*2-1)*0.3;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime+0.2);
+    source.connect(gain).connect(ctx.destination);
+    source.start(ctx.currentTime + i*0.05);
+    source.stop(ctx.currentTime + 0.25 + i*0.05);
+  }
+};
