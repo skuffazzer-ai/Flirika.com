@@ -1,50 +1,51 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+
 const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
+const server = http.createServer(app);
+const io = new Server(server);
 
-const PORT = process.env.PORT || 3000;
-
-app.use(express.static('public'));
+// Статические файлы (HTML, CSS, JS)
+app.use(express.static(path.join(__dirname, 'public')));
 
 let waitingUser = null;
 
-io.on('connection', socket => {
-    console.log('Новый пользователь:', socket.id);
+io.on('connection', (socket) => {
+  console.log('Новый пользователь:', socket.id);
+  socket.partnerId = null;
 
+  socket.on('join', () => {
     if (waitingUser) {
-        // Соединяем с ожидающим
-        socket.partnerId = waitingUser.id;
-        waitingUser.partnerId = socket.id;
+      // Соединяем с ожидающим пользователем
+      socket.partnerId = waitingUser.id;
+      waitingUser.partnerId = socket.id;
 
-        socket.emit('partner-found', { partnerId: waitingUser.id });
-        waitingUser.emit('partner-found', { partnerId: socket.id });
+      socket.emit('partner-found', { partnerId: waitingUser.id });
+      waitingUser.emit('partner-found', { partnerId: socket.id });
 
-        waitingUser = null;
+      waitingUser = null;
     } else {
-        waitingUser = socket;
-        socket.emit('waiting', 'Ждем собеседника...');
+      waitingUser = socket;
+      socket.emit('waiting', 'Ждем собеседника...');
     }
+  });
 
-    socket.on('signal', data => {
-        if (data.partnerId) {
-            io.to(data.partnerId).emit('signal', { signal: data.signal, from: socket.id });
-        }
-    });
+  socket.on('signal', (data) => {
+    if (socket.partnerId) {
+      io.to(socket.partnerId).emit('signal', data);
+    }
+  });
 
-    socket.on('chat-message', data => {
-        if (data.partnerId) {
-            io.to(data.partnerId).emit('chat-message', { message: data.message, from: socket.id });
-        }
-    });
-
-    socket.on('disconnect', () => {
-        if (waitingUser && waitingUser.id === socket.id) waitingUser = null;
-        if (socket.partnerId) {
-            io.to(socket.partnerId).emit('partner-disconnected');
-        }
-        console.log('Пользователь отключился:', socket.id);
-    });
+  socket.on('disconnect', () => {
+    console.log('Пользователь отключился:', socket.id);
+    if (waitingUser && waitingUser.id === socket.id) waitingUser = null;
+    if (socket.partnerId) {
+      io.to(socket.partnerId).emit('partner-disconnected');
+    }
+  });
 });
 
-http.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
