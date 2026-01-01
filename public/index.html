@@ -1,1 +1,224 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flirika Chat</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:Arial,sans-serif; }
+html, body { height:100%; overflow:hidden; background:#2b2b2b; color:#fff; }
+.app { height:100%; display:flex; flex-direction:column; }
+
+/* VIDEO */
+.top { height:55%; display:flex; }
+.video-box { flex:1; position:relative; background:#3a3a3a; border:1px solid #222; }
+video { width:100%; height:100%; object-fit:cover; display:none; }
+.placeholder { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#aaa; }
+
+/* COMMON BUTTON */
+.control-btn { width:38px; height:38px; border:none; border-radius:8px; cursor:pointer; opacity:0.5; font-size:18px; transition: opacity 0.2s; }
+.control-btn:active { opacity:1; }
+
+/* MY VIDEO CONTROLS */
+.my-controls { position:absolute; bottom:8px; right:8px; display:flex; gap:6px; }
+#flipBtn { position:absolute; top:8px; right:8px; background:#555; opacity:0.5; }
+
+/* BUY TOKENS PANEL */
+.token-panel {
+    position:absolute;
+    top:8px;
+    left:8px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 6px;
+    border-radius:8px;
+    background:linear-gradient(135deg,#d4af37,#f5d76e);
+    opacity:0.92;
+}
+.token-panel .balance {
+    background: rgba(255,255,255,0.3);
+    padding:2px 6px;
+    border-radius:4px;
+    font-weight:bold;
+    color:#000;
+}
+
+/* METAL BUY BUTTON */
+.buy-btn {
+    position:relative; overflow:hidden;
+    background:linear-gradient(145deg,#ffffff 0%,#d6d6d6 40%,#bcbcbc 60%,#f5f5f5 100%);
+    color:#000; border:none; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:bold; cursor:pointer;
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.4);
+    transition:transform 0.1s ease, box-shadow 0.1s ease;
+}
+.buy-btn:active {
+    transform:translateY(1px);
+    box-shadow: inset 0 2px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.3);
+}
+.buy-btn::after {
+    content:""; position:absolute; top:-50%; left:-80%; width:50%; height:200%;
+    background:linear-gradient(120deg, transparent, rgba(255,255,255,0.8), transparent);
+    transform:rotate(25deg);
+}
+
+/* CHAT */
+.bottom { flex:1; display:flex; flex-direction:column; }
+.chat { flex:1; padding:10px; overflow-y:auto; background:#353535; }
+.chat p { margin-bottom:6px; }
+.system { color:#aaa; font-style:italic; }
+
+/* INPUT */
+.input-area { display:flex; gap:6px; padding:8px; background:#2b2b2b; }
+input { flex:1; padding:10px; border-radius:6px; border:none; }
+.send { background:#3498db; color:#fff; border:none; border-radius:6px; padding:0 14px; opacity:1; }
+
+/* PULL-TO-REFRESH INDICATOR */
+#ptr-indicator {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 40px;
+    border: 3px solid #3498db;
+    border-top-color: transparent;
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 1000;
+}
+#ptr-indicator.spin {
+    animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+    0% { transform: translateX(-50%) rotate(0deg); }
+    100% { transform: translateX(-50%) rotate(360deg); }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- PULL-TO-REFRESH -->
+<div id="ptr-indicator"></div>
+
+<!-- VIDEO -->
+<div class="top">
+  <div class="video-box">
+    <video id="myVideo" autoplay muted playsinline></video>
+    <div class="placeholder" id="myLabel">Моя камера</div>
+
+    <div class="token-panel">
+      <button class="buy-btn" id="buyBtn">BUY</button>
+      <div class="balance">0.007$</div>
+    </div>
+
+    <button id="flipBtn" class="control-btn">🔁</button>
+
+    <div class="my-controls">
+      <button id="nextBtn" class="control-btn" style="background:#2ecc71;display:none;">⏭</button>
+      <button id="startBtn" class="control-btn" style="background:#3498db;">▶️</button>
+      <button id="endBtn" class="control-btn" style="background:#e74c3c;display:none;">⏹</button>
+    </div>
+  </div>
+
+  <div class="video-box">
+    <video id="partnerVideo" autoplay playsinline></video>
+    <div class="placeholder">Собеседник</div>
+
+    <button class="control-btn" id="reportBtn" style="top:8px; right:8px; background:#e74c3c; position:absolute; font-size:16px;">🚩</button>
+    <button class="control-btn" id="likeBtn" style="top:8px; left:8px; background:#e91e63; position:absolute; font-size:16px;">❤️</button>
+    <button class="control-btn" id="giftBtn" style="bottom:8px; left:8px; background:#f1c40f; position:absolute; font-size:16px;">🎁</button>
+  </div>
+</div>
+
+<!-- CHAT -->
+<div class="bottom">
+  <div class="chat" id="chat">
+    <p class="system">Чат готов</p>
+  </div>
+
+  <div class="input-area">
+    <input id="textInput" placeholder="Введите сообщение">
+    <button class="send" id="sendBtn">Отправить</button>
+  </div>
+</div>
+
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const SERVER = location.origin;
+const socket = io(SERVER);
+
+let localStream = null;
+let pc = null;
+let usingFront = true;
+
+const startBtn = document.getElementById("startBtn");
+const nextBtn = document.getElementById("nextBtn");
+const endBtn = document.getElementById("endBtn");
+const flipBtn = document.getElementById("flipBtn");
+const myVideo = document.getElementById("myVideo");
+const partnerVideo = document.getElementById("partnerVideo");
+const chat = document.getElementById("chat");
+const input = document.getElementById("textInput");
+const sendBtn = document.getElementById("sendBtn");
+
+// ===== CAMERA =====
+async function startCamera(){
+  localStream = await navigator.mediaDevices.getUserMedia({ video:{facingMode: usingFront?"user":"environment"}, audio:true });
+  myVideo.srcObject = localStream;
+  myVideo.style.display="block";
+}
+
+// ===== PEER CONNECTION =====
+function createPeer(){
+  pc = new RTCPeerConnection({ iceServers:[{ urls:"stun:stun.l.google.com:19302" }] });
+  localStream.getTracks().forEach(track=>pc.addTrack(track, localStream));
+  pc.ontrack = e => { partnerVideo.srcObject = e.streams[0]; partnerVideo.style.display="block"; };
+  pc.onicecandidate = e => { if(e.candidate) socket.emit("signal",{candidate:e.candidate}); };
+}
+
+function cleanup(){
+  if(pc){ pc.close(); pc=null; }
+  if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  partnerVideo.srcObject = null;
+}
+
+// ===== SOCKET EVENTS =====
+socket.on("matched", async isCaller => {
+  createPeer();
+  if(isCaller){
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit("signal",{offer});
+  }
+});
+
+socket.on("signal", async data => {
+  if(data.offer){
+    createPeer();
+    await pc.setRemoteDescription(data.offer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit("signal",{answer});
+  }
+  if(data.answer) await pc.setRemoteDescription(data.answer);
+  if(data.candidate) await pc.addIceCandidate(data.candidate);
+});
+
+socket.on("partner-left", ()=>{ cleanup(); socket.emit("join"); });
+
+// ===== BUTTONS =====
+startBtn.onclick = async ()=>{ await startCamera(); socket.emit("join"); startBtn.style.display="none"; endBtn.style.display="block"; nextBtn.style.display="block"; };
+nextBtn.onclick = ()=>{ cleanup(); socket.emit("join"); };
+endBtn.onclick = ()=>{ cleanup(); startBtn.style.display="block"; endBtn.style.display="none"; nextBtn.style.display="none"; };
+flipBtn.onclick = async ()=>{ usingFront=!usingFront; await startCamera(); };
+sendBtn.onclick = ()=>{ if(input.value.trim()){ const p=document.createElement("p"); p.textContent="Вы: "+input.value; chat.appendChild(p); input.value=""; chat.scrollTop=chat.scrollHeight; } };
+input.addEventListener("keydown",e=>{ if(e.key==="Enter") sendBtn.click(); });
+</script>
+</body>
+</html>
 
