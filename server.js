@@ -7,45 +7,52 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Статические файлы (HTML, CSS, JS)
+const PORT = process.env.PORT || 3000;
+
+// Статика
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
 
-let waitingUser = null;
+// WebRTC сигналинг через Socket.io
+let users = [];
 
-io.on('connection', (socket) => {
-  console.log('Новый пользователь:', socket.id);
-  socket.partnerId = null;
+io.on('connection', socket => {
+    console.log('User connected:', socket.id);
 
-  socket.on('join', () => {
-    if (waitingUser) {
-      // Соединяем с ожидающим пользователем
-      socket.partnerId = waitingUser.id;
-      waitingUser.partnerId = socket.id;
+    // При поиске собеседника
+    socket.on('findPartner', () => {
+        const partner = users.find(u => u.id !== socket.id && !u.partner);
+        if (partner) {
+            users.push({ id: socket.id, partner: partner.id });
+            partner.partner = socket.id;
+            socket.partner = partner.id;
 
-      socket.emit('partner-found', { partnerId: waitingUser.id });
-      waitingUser.emit('partner-found', { partnerId: socket.id });
+            socket.emit('partnerFound', { partnerId: partner.id });
+            io.to(partner.id).emit('partnerFound', { partnerId: socket.id });
+        } else {
+            users.push({ id: socket.id });
+        }
+    });
 
-      waitingUser = null;
-    } else {
-      waitingUser = socket;
-      socket.emit('waiting', 'Ждем собеседника...');
-    }
-  });
+    // WebRTC сигнал
+    socket.on('signal', data => {
+        if (socket.partner) {
+            io.to(socket.partner).emit('signal', { signal: data.signal, from: socket.id });
+        }
+    });
 
-  socket.on('signal', (data) => {
-    if (socket.partnerId) {
-      io.to(socket.partnerId).emit('signal', data);
-    }
-  });
+    // Чат
+    socket.on('chatMessage', msg => {
+        if (socket.partner) {
+            io.to(socket.partner).emit('chatMessage', { text: msg });
+        }
+    });
 
-  socket.on('disconnect', () => {
-    console.log('Пользователь отключился:', socket.id);
-    if (waitingUser && waitingUser.id === socket.id) waitingUser = null;
-    if (socket.partnerId) {
-      io.to(socket.partnerId).emit('partner-disconnected');
-    }
-  });
+    // Отключение
+    socket.on('disconnect', () => {
+        users = users.filter(u => u.id !== socket.id && u.partner !== socket.id);
+        if (socket.partner) io.to(socket.partner).emit('partnerDisconnected');
+    });
 });
 
-const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
