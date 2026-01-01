@@ -1,86 +1,105 @@
 const socket = io();
 
+const myVideo = document.getElementById("myVideo");
+const partnerVideo = document.getElementById("partnerVideo");
 const startBtn = document.getElementById("startBtn");
+const nextBtn = document.getElementById("nextBtn");
 const endBtn = document.getElementById("endBtn");
-const localVideo = document.getElementById("myVideo");
-const remoteVideo = document.getElementById("partnerVideo");
+const chat = document.getElementById("chat");
+const textInput = document.getElementById("textInput");
+const sendBtn = document.getElementById("sendBtn");
 
-let localStream;
-let peerConnection;
-
+let localStream, peerConnection;
 const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-// ===== НАЧАТЬ
+function appendMessage(msg) {
+  const p = document.createElement("p");
+  p.textContent = msg;
+  chat.appendChild(p);
+  chat.scrollTop = chat.scrollHeight;
+}
+
 startBtn.onclick = async () => {
-  startBtn.disabled = true;
+  localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+  myVideo.srcObject = localStream;
 
-  // 1. Включаем камеру и микрофон
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  localVideo.srcObject = localStream;
-
-  // 2. Сообщаем серверу, что мы готовы
   socket.emit("ready");
 };
 
-// ===== ОКОНЧАНИЕ
-endBtn.onclick = () => {
+nextBtn.onclick = () => {
   if (peerConnection) {
     peerConnection.close();
     peerConnection = null;
+    partnerVideo.srcObject = null;
   }
-
-  if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
-    localVideo.srcObject = null;
-  }
-
-  remoteVideo.srcObject = null;
-  startBtn.disabled = false;
+  socket.emit("ready");
 };
 
-// ===== WebRTC СИГНАЛИЗАЦИЯ
+endBtn.onclick = () => {
+  if (peerConnection) peerConnection.close();
+  if (localStream) localStream.getTracks().forEach(t => t.stop());
+  myVideo.srcObject = null;
+  partnerVideo.srcObject = null;
+};
+
+sendBtn.onclick = () => {
+  const msg = textInput.value.trim();
+  if (!msg) return;
+  appendMessage("Вы: " + msg);
+  socket.emit("message", msg);
+  textInput.value = "";
+};
+
+socket.on("message", msg => appendMessage("Собеседник: " + msg));
+
 socket.on("match", async () => {
-  createPeer();
+  peerConnection = new RTCPeerConnection(config);
+
+  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+  peerConnection.ontrack = e => {
+    partnerVideo.srcObject = e.streams[0];
+  };
+
+  peerConnection.onicecandidate = e => {
+    if (e.candidate) socket.emit("ice-candidate", e.candidate);
+  };
 
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
-
   socket.emit("offer", offer);
 });
 
-socket.on("offer", async (offer) => {
-  createPeer();
+socket.on("offer", async offer => {
+  peerConnection = new RTCPeerConnection(config);
+
+  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+  peerConnection.ontrack = e => {
+    partnerVideo.srcObject = e.streams[0];
+  };
+
+  peerConnection.onicecandidate = e => {
+    if (e.candidate) socket.emit("ice-candidate", e.candidate);
+  };
 
   await peerConnection.setRemoteDescription(offer);
-
   const answer = await peerConnection.createAnswer();
   await peerConnection.setLocalDescription(answer);
-
   socket.emit("answer", answer);
 });
 
-socket.on("answer", async (answer) => {
+socket.on("answer", async answer => {
   await peerConnection.setRemoteDescription(answer);
 });
 
-socket.on("ice-candidate", (candidate) => {
-  if (peerConnection) peerConnection.addIceCandidate(candidate);
+socket.on("ice-candidate", async candidate => {
+  try { await peerConnection.addIceCandidate(candidate); } catch(e) {}
 });
 
-function createPeer() {
-  peerConnection = new RTCPeerConnection(config);
-
-  if (localStream) {
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-  }
-
-  peerConnection.ontrack = (e) => {
-    remoteVideo.srcObject = e.streams[0];
-  };
-
-  peerConnection.onicecandidate = (e) => {
-    if (e.candidate) socket.emit("ice-candidate", e.candidate);
-  };
-}
-
+socket.on("partner-disconnected", () => {
+  if (peerConnection) peerConnection.close();
+  peerConnection = null;
+  partnerVideo.srcObject = null;
+  appendMessage("Собеседник отключился");
+});
