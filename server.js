@@ -8,21 +8,19 @@ const io = new Server(server);
 
 app.use(express.static("public"));
 
-let waitingUser = null;
+let waiting = null;
 
 io.on("connection", socket => {
-  console.log("User connected", socket.id);
+  if (waiting) {
+    socket.partner = waiting;
+    waiting.partner = socket;
 
-  if (waitingUser) {
-    socket.partner = waitingUser;
-    waitingUser.partner = socket;
+    socket.emit("match", { initiator: true });
+    waiting.emit("match", { initiator: false });
 
-    socket.emit("match");
-    waitingUser.emit("match");
-
-    waitingUser = null;
+    waiting = null;
   } else {
-    waitingUser = socket;
+    waiting = socket;
   }
 
   socket.on("signal", data => {
@@ -36,10 +34,8 @@ io.on("connection", socket => {
       socket.partner.emit("leave");
       socket.partner.partner = null;
     }
-    if (waitingUser === socket) waitingUser = null;
+    if (waiting === socket) waiting = null;
   });
 });
 
-server.listen(process.env.PORT || 3000, () => {
-  console.log("Server running");
-});
+server.listen(process.env.PORT || 3000);
