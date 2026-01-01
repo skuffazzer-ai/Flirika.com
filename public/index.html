@@ -2,46 +2,55 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Flirika</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="app">
 
-  <!-- TOP VIDEO -->
-  <div class="top">
-    <div class="video-box">
-      <video id="myVideo" autoplay muted playsinline></video>
-      <div class="placeholder" id="myLabel">Моя камера</div>
-      <button id="flipBtn" class="control-btn">🔁</button>
-      <div class="my-controls">
-        <button id="startBtn" class="control-btn">▶️</button>
-        <button id="endBtn" class="control-btn" style="display:none;">⏹</button>
-        <button id="nextBtn" class="control-btn" style="display:none;">⏭</button>
-      </div>
+<!-- TOP VIDEO -->
+<div class="top">
+
+  <!-- Моя камера -->
+  <div class="video-box">
+    <video id="myVideo" autoplay muted playsinline></video>
+    <div class="placeholder" id="myLabel">Моя камера</div>
+
+    <div class="token-panel">
+      <button class="buy-btn" id="buyBtn">BUY</button>
+      <div class="balance">0.007$</div>
     </div>
 
-    <div class="video-box">
-      <video id="partnerVideo" autoplay playsinline></video>
-      <div class="placeholder">Собеседник</div>
-      <button class="control-btn" id="reportBtn">🚩</button>
-      <button class="control-btn" id="likeBtn">❤️</button>
-      <button class="control-btn" id="giftBtn">🎁</button>
+    <button id="flipBtn" class="control-btn">🔁</button>
+
+    <div class="my-controls">
+      <button id="nextBtn" class="control-btn" style="background:#2ecc71;display:none;">⏭</button>
+      <button id="startBtn" class="control-btn" style="background:#3498db;">▶️</button>
+      <button id="endBtn" class="control-btn" style="background:#e74c3c;display:none;">⏹</button>
     </div>
   </div>
 
-  <!-- CHAT -->
-  <div class="bottom">
-    <div class="chat" id="chat">
-      <p class="system">Чат готов</p>
-    </div>
-    <div class="input-area">
-      <input id="textInput" placeholder="Введите сообщение">
-      <button class="send" id="sendBtn">Отправить</button>
-    </div>
+  <!-- Камера собеседника -->
+  <div class="video-box">
+    <video id="partnerVideo" autoplay playsinline></video>
+    <div class="placeholder">Собеседник</div>
+    <button class="control-btn" id="reportBtn" style="top:8px; right:8px; background:#e74c3c; position:absolute; font-size:16px;">🚩</button>
+    <button class="control-btn" id="likeBtn" style="top:8px; left:8px; background:#e91e63; position:absolute; font-size:16px;">❤️</button>
+    <button class="control-btn" id="giftBtn" style="bottom:8px; left:8px; background:#f1c40f; position:absolute; font-size:16px;">🎁</button>
   </div>
 
+</div>
+
+<!-- CHAT -->
+<div class="bottom">
+  <div class="chat" id="chat">
+    <p class="system">Чат готов</p>
+  </div>
+  <div class="input-area">
+    <input id="textInput" placeholder="Введите сообщение">
+    <button class="send" id="sendBtn">Отправить</button>
+  </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
